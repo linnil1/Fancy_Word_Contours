@@ -22,4 +22,10 @@ def imgToPoints(img, n, m, dev, mask=[]):
     samples[samples[:, 0] < 0, 0] = 0
     samples[samples[:, 1] < 0, 1] = 0
 
+    # background = label 0
+    zeros = np.vstack(np.where(img == 0)).T
+    zeros_cho = zeros[np.random.choice(np.arange(zeros.shape[0]), size=n), :]
+    samples = np.vstack([samples, zeros_cho])
+    labels = np.hstack([labels, np.zeros(zeros_cho.shape[0], dtype=np.uint8)])
+
     return samples, labels
