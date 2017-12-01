@@ -6,6 +6,7 @@ from skimage import measure
 import numpy as np
 import cv2
 import os
+import argparse
 
 def getCmap(color):
     two = np.repeat(np.array([[color]]), 256, axis=0)
@@ -14,24 +15,47 @@ def getCmap(color):
     return ListedColormap(rgb / 255), rgb[255] / 255
     # mpl.colorbar.ColorbarBase(plt.gca(),cmap=cmap)
 
+def checkPositive(value):
+    v = int(value)
+    if v <= 0:
+         raise argparse.ArgumentTypeError("%s is an invalid positive int value" % value)
+    return v
+
+# parse data
+parser = argparse.ArgumentParser(description='Using SVM to redraw you image.')
+parser.add_argument('path', type=str, help="Path of image",
+                    default="image.jpg")
+parser.add_argument('-n', type=checkPositive, default=2000,
+                    help="Number of points in image")
+parser.add_argument('-m', type=checkPositive, default=5,
+                    help="How many points that beside real points we choose from image")
+parser.add_argument('-d', '--dev', type=checkPositive, default=5, 
+                    help="The deviation of points that beside real points we choose from image")
+parser.add_argument('-r', '--reso', type=checkPositive, default=5,
+                    help="Resolution of image (size = real_size / reso)")
+parser.add_argument('-l', '--level', type=checkPositive, default=5,
+                    help="How many contour level you want to plot")
+args = parser.parse_args()
+print("Add points to image")
 
 # image data
-name = "image.jpg"
+name = args.path
+reso = args.reso
+num_cont = args.level
 img = cv2.imread(name, 0)
-n = 2000
-m = 5
-dev = 5
-reso = 5
-num_cont = 10
-want_save = True
+dpi = 100
+want_save = True # debug use
+
+# main process
 ret, th_img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 mask = cv2.connectedComponents(th_img)[1]
-samples, labels = imgToPoints(th_img, n, m, dev, mask)
+samples, labels = imgToPoints(th_img, args.n, args.m, args.dev, mask)
+print("Training")
 label_map, value_map, xy = decision_map(th_img, samples, labels, reso=reso, name=name)
 
 # orignial
 plt.subplot(221)
-plt.imshow(img)
+plt.imshow(th_img)
 
 # draw value
 plt.subplot(222)
@@ -48,12 +72,13 @@ plt.imshow(label_map.reshape(xy[0].shape).T)
 plt.subplot(224)
 
 if want_save:
-    plt.figure()
+    plt.figure(figsize=(img.shape[1] / dpi, img.shape[0] / dpi), dpi=dpi, frameon=False)
     plt.axis('off')
 blank = np.zeros([*img.shape, 3], dtype=np.float)
 blank[:,:,0] = 0.1
 num_labels = np.sort(np.unique(labels))
 
+# find and draw contour
 for n in num_labels:
     cmap, color= getCmap(180 * n / len(num_labels))
     tmp_value = np.ma.array(value_map, mask=(label_map!=n), fill_value=0).filled()
@@ -78,6 +103,10 @@ for n in num_labels:
     blank[np.uint(filt_xy[::reso, 0]), np.uint(filt_xy[::reso, 1])] = color
 plt.imshow(blank)
 
+# save and plot it
 if want_save:
-    plt.savefig(name + "_result.jpg", bbox_inches='tight')
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    plt.savefig(name + "_result.jpg")
+    print("save it at " + name + "_result.jpg")
 plt.show() 
+print("You can clean it by `rm " + name + "_*`")
